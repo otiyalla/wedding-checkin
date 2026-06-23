@@ -31,6 +31,11 @@
 <body>
   <h1>Wedding Check-In</h1>
   <p class="subtitle">Scan a QR code or enter the ticket code</p>
+  <div id="result">
+    <div class="result-icon" id="resultIcon"></div>
+    <div class="result-name" id="resultName"></div>
+    <div class="result-msg" id="resultMsg"></div>
+  </div>
   <div class="card">
     <div id="reader"></div>
     <button class="toggle-btn" id="toggleCamera">Start Camera Scanner</button>
@@ -39,11 +44,6 @@
       <input id="ticketInput" type="text" placeholder="e.g. EVT-001" autocomplete="off" autocorrect="off" spellcheck="false" />
       <button id="checkBtn">Check In</button>
     </div>
-  </div>
-  <div id="result">
-    <div class="result-icon" id="resultIcon"></div>
-    <div class="result-name" id="resultName"></div>
-    <div class="result-msg" id="resultMsg"></div>
   </div>
   <div id="scanCount"></div>
   <script>
