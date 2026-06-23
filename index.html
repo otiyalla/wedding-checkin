@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wedding Check-In</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f0eb; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 24px 16px; }
+    h1 { font-size: 1.6rem; color: #3a2e28; margin-bottom: 4px; text-align: center; }
+    .subtitle { color: #7a6a60; font-size: 0.9rem; margin-bottom: 24px; text-align: center; }
+    .card { background: white; border-radius: 16px; padding: 20px; width: 100%; max-width: 480px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 16px; }
+    #reader { width: 100%; border-radius: 10px; overflow: hidden; }
+    .divider { display: flex; align-items: center; gap: 10px; margin: 16px 0; color: #999; font-size: 0.85rem; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #e5e0db; }
+    .input-row { display: flex; gap: 8px; }
+    #ticketInput { flex: 1; padding: 12px 14px; border: 2px solid #e0d8d0; border-radius: 10px; font-size: 1rem; outline: none; text-transform: uppercase; }
+    #ticketInput:focus { border-color: #b89e85; }
+    #checkBtn { padding: 12px 18px; background: #3a2e28; color: white; border: none; border-radius: 10px; font-size: 0.95rem; cursor: pointer; }
+    #result { display: none; border-radius: 12px; padding: 18px 20px; width: 100%; max-width: 480px; text-align: center; }
+    #result.success { background: #e8f5e9; border: 2px solid #66bb6a; }
+    #result.error { background: #fdecea; border: 2px solid #ef5350; }
+    .result-icon { font-size: 2.5rem; margin-bottom: 8px; }
+    .result-name { font-size: 1.3rem; font-weight: 600; color: #2e2e2e; }
+    .result-msg { font-size: 0.9rem; color: #555; margin-top: 4px; }
+    #scanCount { font-size: 0.8rem; color: #999; margin-top: 8px; text-align: center; }
+    .toggle-btn { background: none; border: 1px solid #c0b5aa; border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; color: #7a6a60; cursor: pointer; display: block; margin: 12px auto 0; }
+  </style>
+</head>
+<body>
+  <h1>Wedding Check-In</h1>
+  <p class="subtitle">Scan a QR code or enter the ticket code</p>
+  <div class="card">
+    <div id="reader"></div>
+    <button class="toggle-btn" id="toggleCamera">Start Camera Scanner</button>
+    <div class="divider">or enter manually</div>
+    <div class="input-row">
+      <input id="ticketInput" type="text" placeholder="e.g. EVT-001" autocomplete="off" autocorrect="off" spellcheck="false" />
+      <button id="checkBtn">Check In</button>
+    </div>
+  </div>
+  <div id="result">
+    <div class="result-icon" id="resultIcon"></div>
+    <div class="result-name" id="resultName"></div>
+    <div class="result-msg" id="resultMsg"></div>
+  </div>
+  <div id="scanCount"></div>
+  <script>
+    const API_URL = 'https://script.google.com/macros/s/AKfycbzCoowEfWalLK5vKEbAUAD0TDAdDvBjJ2PwhYaYYY2a3KorWIHvMWpvqs9hk5khWLrAWg/exec';
+    let scansToday = 0, cameraRunning = false, html5QrCode = null, lastCode = '', lastCodeTime = 0;
+    const DEBOUNCE_MS = 3000;
+    const ticketInput = document.getElementById('ticketInput');
+    const checkBtn = document.getElementById('checkBtn');
+    const resultDiv = document.getElementById('result');
+    const resultIcon = document.getElementById('resultIcon');
+    const resultName = document.getElementById('resultName');
+    const resultMsg = document.getElementById('resultMsg');
+    const scanCountDiv = document.getElementById('scanCount');
+    const toggleBtn = document.getElementById('toggleCamera');
+    async function checkTicket(code) {
+      code = code.trim().toUpperCase();
+      if (!code) return;
+      const now = Date.now();
+      if (code === lastCode && (now - lastCodeTime) < DEBOUNCE_MS) return;
+      lastCode = code; lastCodeTime = now;
+      ticketInput.value = '';
+      showResult(null, '', 'Checking...');
+      try {
+        const res = await fetch(API_URL + '?code=' + encodeURIComponent(code));
+        const data = await res.json();
+        scansToday++;
+        scanCountDiv.textContent = 'Scans this session: ' + scansToday;
+        showResult(data.success, data.name, data.message);
+        setTimeout(() => { resultDiv.style.display = 'none'; ticketInput.focus(); }, 4000);
+      } catch (err) { showResult(false, '', 'Network error.'); }
+    }
+    function showResult(success, name, message) {
+      resultDiv.style.display = 'block';
+      if (success === null) { resultDiv.className = ''; resultIcon.textContent = '...'; resultName.textContent = ''; resultMsg.textContent = message; return; }
+      resultDiv.className = success ? 'success' : 'error';
+      resultIcon.textContent = success ? 'OK' : 'DENIED';
+      resultName.textContent = name || '';
+      resultMsg.textContent = message;
+    }
+    ticketInput.addEventListener('keydown', e => { if (e.key === 'Enter') checkTicket(ticketInput.value); });
+    ticketInput.addEventListener('input', () => { if (/^EVT-\d{3,}$/.test(ticketInput.value.trim().toUpperCase())) checkTicket(ticketInput.value); });
+    checkBtn.addEventListener('click', () => checkTicket(ticketInput.value));
+    toggleBtn.addEventListener('click', async () => {
+      if (!cameraRunning) {
+        try {
+          html5QrCode = new Html5Qrcode('reader');
+          await html5QrCode.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 250, height: 250 } }, decodedText => checkTicket(decodedText), () => {});
+          cameraRunning = true; toggleBtn.textContent = 'Stop Camera';
+        } catch (err) { alert('Camera not available: ' + err.message); }
+      } else { await html5QrCode.stop(); cameraRunning = false; toggleBtn.textContent = 'Start Camera Scanner'; }
+    });
+    ticketInput.focus();
+  </script>
+</body>
+</html>
